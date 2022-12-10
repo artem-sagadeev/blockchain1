@@ -7,6 +7,8 @@ public class Block
 {
     public int Number { get; set; }
     
+    public byte[] PreviousHash { get; set; }
+    
     public byte[] Data { get; set; }
     
     public byte[] SignedData { get; set; }
@@ -16,9 +18,11 @@ public class Block
     public Block(int number, string data, byte[] previousHash)
     {
         Number = number;
-        Data = previousHash.Concat(Encoding.UTF8.GetBytes(data)).ToArray();
-        
-        var hashedData = SHA256.HashData(Data);
+        PreviousHash = previousHash;
+        Data = Encoding.UTF8.GetBytes(data);
+
+        var dataWithPreviousHash = PreviousHash.Concat(Data).ToArray();
+        var hashedData = SHA256.HashData(dataWithPreviousHash);
         var signedData = Cryptography.Sign(hashedData);
         SignedData = signedData;
         
@@ -29,6 +33,7 @@ public class Block
 
     public bool Verify()
     {
-        return Cryptography.Verify(Data, SignedData) && Cryptography.Verify(SignedData, SignedHash);
+        var dataWithPreviousHash = PreviousHash.Concat(Data).ToArray();
+        return Cryptography.Verify(dataWithPreviousHash, SignedData) && Cryptography.Verify(SignedData, SignedHash);
     }
 }
