@@ -1,32 +1,65 @@
-﻿namespace BlockChain;
+﻿using Microsoft.EntityFrameworkCore;
+
+namespace BlockChain;
 
 public class Blockchain
 {
-    private readonly List<Block> _blocks = new();
-    private byte[] _previousHash;
+    private readonly ApplicationContext _context;
 
     public Blockchain()
     {
-        _previousHash = new byte[] { 0, 0, 0, 0, 0, 0, 0 };
-    }
-
-    public Block this[int index]
-    {
-        get => _blocks[index];
-        set => _blocks[index] = value;
+        _context = new ApplicationContext();
     }
     
-    public void AddBlock(string data)
+    private async Task<byte[]> GetPreviousHash() => await _context
+        .Blocks
+        .OrderBy(block => block.Id)
+        .Select(block => block.SignedHash)
+        .LastOrDefaultAsync() ?? new byte[] { 0, 0, 0, 0, 0, 0};
+
+    private async Task<List<Block>> GetAllBlocks() => await _context
+        .Blocks
+        .ToListAsync();
+
+    public async Task<Block> GetBlock(int id) => await _context
+        .Blocks
+        .FirstOrDefaultAsync(block => block.Id == id);
+
+    public async Task<int> AddBlock(string data)
     {
-        var number = _blocks.Count;
-        var block = new Block(number, data, _previousHash);
+        var previousHash = await GetPreviousHash();
+        var block = await Block.CreateBlock(data, previousHash);
         
-        _blocks.Add(block);
-        _previousHash = block.SignedHash;
+        _context.Blocks.Add(block);
+        await _context.SaveChangesAsync();
+
+        return block.Id;
     }
 
-    public bool Verify()
+    public async Task UpdateBlock(Block block)
     {
-        return _blocks.All(block => block.Verify());
+        _context.Blocks.Update(block);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAllBlocks()
+    {
+        var allBlocks = await GetAllBlocks();
+        _context.Blocks.RemoveRange(allBlocks);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<bool> Verify()
+    {
+        var blocks = await GetAllBlocks();
+        foreach (var block in blocks)
+        {
+            if (await block.Verify())
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

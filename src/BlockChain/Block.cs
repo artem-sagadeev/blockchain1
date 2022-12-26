@@ -5,7 +5,7 @@ namespace BlockChain;
 
 public class Block
 {
-    public int Number { get; set; }
+    public int Id { get; set; }
     
     public byte[] PreviousHash { get; set; }
     
@@ -15,25 +15,34 @@ public class Block
     
     public byte[] SignedHash { get; set; }
 
-    public Block(int number, string data, byte[] previousHash)
+    public static async Task<Block> CreateBlock(string data, byte[] previousHash)
     {
-        Number = number;
-        PreviousHash = previousHash;
-        Data = Encoding.UTF8.GetBytes(data);
+        var block = new Block
+        {
+            PreviousHash = previousHash,
+            Data = Encoding.UTF8.GetBytes(data)
+        };
 
-        var dataWithPreviousHash = PreviousHash.Concat(Data).ToArray();
+        var dataWithPreviousHash = block.PreviousHash.Concat(block.Data).ToArray();
         var hashedData = SHA256.HashData(dataWithPreviousHash);
-        var signedData = Cryptography.Sign(hashedData);
-        SignedData = signedData;
+        var (hashedDataWithTimestamp, signedData) = await ArbiterClient.GetSignature(hashedData);
+        block.Data = hashedDataWithTimestamp;
+        block.SignedData = signedData;
         
         var hash = SHA256.HashData(signedData);
-        var signedHash = Cryptography.Sign(hash);
-        SignedHash = signedHash;
+        var (hashedSignWithTimestamp, signedHash) = await ArbiterClient.GetSignature(hash);
+        block.SignedData = hashedSignWithTimestamp;
+        block.SignedHash = signedHash;
+
+        return block;
     }
 
-    public bool Verify()
+    public async Task<bool> Verify()
     {
         var dataWithPreviousHash = PreviousHash.Concat(Data).ToArray();
-        return Cryptography.Verify(dataWithPreviousHash, SignedData) && Cryptography.Verify(SignedData, SignedHash);
+        return await Cryptography.Verify(dataWithPreviousHash, SignedData) && 
+               await Cryptography.Verify(SignedData, SignedHash);
     }
+    
+    private Block() {}
 }
